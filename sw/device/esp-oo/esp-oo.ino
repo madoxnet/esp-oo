@@ -6,12 +6,15 @@
 #include <WebSockets.h>
 #include <WebSocketsServer.h>
 
-//Webserver and page to be served included in PROGMEM within webpage.h
+//Webserver and page to be served included in PROGMEM within guihtml.h
 #include <ESP8266WebServer.h>
-#include "webpage.h"
+#include "guihtml.h"
 
 //mDNS
 #include <ESP8266mDNS.h>
+
+//EEPROM
+#include <EEPROM.h>
 
 //Motor pinout definitions
 #define M1A 14
@@ -27,6 +30,14 @@ char M_A_STR[9]={0,0,0,0,0,0,0,0,0};
 char M_B_STR[9]={0,0,0,0,0,0,0,0,0};
 uint32_t M_A = 0;
 uint32_t M_B = 0;
+
+//WiFi configuration
+char ssid1[32] = "";
+char pass1[32] = "";
+char ssid2[32] = "";
+char pass2[32] = "";
+char hostn[32] = "";
+
 ESP8266WiFiMulti WiFiMulti;
 ESP8266WebServer webServer = ESP8266WebServer(80);
 WebSocketsServer webSocket = WebSocketsServer(81);
@@ -71,25 +82,58 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t payloa
     }
 }
 
+
 void setup() {
+  int retries = 0;
+  
   Serial.begin(115200);
   delay(10);
 
   Serial.setDebugOutput(true);
 
   Serial.println();
-  
-  WiFiMulti.addAP("www.johnchan.net", "WhereIsHuey");
-  WiFiMulti.addAP("www.madox.net", "WhereIsCarKey");
-  while(WiFiMulti.run() != WL_CONNECTED) {
-    delay(100);
+
+  //Load WiFi
+  Serial.println("Loading WiFi config");
+  EEPROM.begin(512);
+  EEPROM.get(0, ssid1);
+  EEPROM.get(0+sizeof(ssid1), pass1);
+  EEPROM.get(0+sizeof(ssid1)+sizeof(pass1), ssid2);
+  EEPROM.get(0+sizeof(ssid1)+sizeof(pass1)+sizeof(ssid2), pass2);
+  EEPROM.get(0+sizeof(ssid1)+sizeof(pass1)+sizeof(ssid2)+sizeof(pass2), hostn);
+
+  Serial.println(ssid1);
+  Serial.println(pass1);
+  Serial.println(ssid2);
+  Serial.println(pass2);
+  Serial.println(hostn);
+  WiFi.hostname(hostn);
+  WiFi.mode(WIFI_AP_STA);
+  WiFiMulti.addAP(ssid1, pass1);
+  WiFiMulti.addAP(ssid2, pass2);
+
+  while(retries < 20){
+    if(WiFiMulti.run() == WL_CONNECTED) { 
+      break;
+    }
+    delay(500);
+    Serial.println("Attempting WiFi connection");
+    retries++;
   }
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
+  
+  if(WiFiMulti.run() == WL_CONNECTED){
+    WiFi.mode(WIFI_STA);
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    WiFi.softAP("ESPOO-AP");
+    Serial.println("");
+    Serial.println("WiFi AP Started");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.softAPIP());    
+  }
   analogWriteRange(255);
   pinMode(M1A, OUTPUT);
   pinMode(M2A, OUTPUT);
@@ -103,11 +147,38 @@ void setup() {
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
   webServer.on("/", []() {
-    webServer.send(200, "text/html", WEBPAGE);
+    webServer.send(200, "text/html", GUIHTML);
+  });
+  webServer.on("/config.js", []() {
+    String output = "var ssid1='" + String(ssid1) + "';";
+    output += "var pass1='" + String(pass1) + "';";
+    output += "var ssid2='" + String(ssid2) + "';";
+    output += "var pass2='" + String(pass2) + "';";
+    output += "var hostname='" + String(hostn) + "';";
+    webServer.send(200, "text/json", output);
+  });
+  webServer.on("/configwifi", []() {
+    Serial.println("Saving WiFi Config");
+    webServer.arg("ssid1").toCharArray(ssid1, sizeof(ssid1)-1);
+    webServer.arg("pass1").toCharArray(pass1, sizeof(pass1)-1);
+    webServer.arg("ssid2").toCharArray(ssid2, sizeof(ssid2)-1);
+    webServer.arg("pass2").toCharArray(pass2, sizeof(pass2)-1);
+    webServer.arg("hostname").toCharArray(hostn, sizeof(hostn)-1);
+    
+    EEPROM.put(0, ssid1);
+    EEPROM.put(0+sizeof(ssid1), pass1);
+    EEPROM.put(0+sizeof(ssid1)+sizeof(pass1), ssid2);
+    EEPROM.put(0+sizeof(ssid1)+sizeof(pass1)+sizeof(ssid2), pass2);
+    EEPROM.put(0+sizeof(ssid1)+sizeof(pass1)+sizeof(ssid2)+sizeof(pass2), hostn);
+    EEPROM.commit();
+    EEPROM.end();
+    webServer.send(200, "text/html", "Config saved - Rebooting, please reconnect.");
+    Serial.println("Rebooting...");
+    ESP.reset();
   });
   webServer.begin();
     
-  if(MDNS.begin("esp-oo")) {
+  if(MDNS.begin(hostn)) {
     Serial.println("MDNS responder started");
   }
   MDNS.addService("http", "tcp", 80);

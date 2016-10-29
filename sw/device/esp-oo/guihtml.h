@@ -1,3 +1,4 @@
+const char GUIHTML[] PROGMEM = R"=====(
 <!DOCTYPE HTML>
 <html>
   <head>
@@ -192,3 +193,4 @@ button, input, textarea, select, option {
     </div>
   </body>
 </html>
+)=====";
