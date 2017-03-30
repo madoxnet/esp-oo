@@ -17,11 +17,17 @@ var cmds = [0,0,0,0,0,0,0,0];
 var wsurl = "ws://" + window.location.hostname + ":81/";
 var docMinSize = 100;
 var cmdstr = "";
+var touchscale = 3;
+var deadband = 10; //10% deadband
+var map_outmin = 150;
+var map_outmax = 255;
 
 function init(){
   left = document.getElementById("left");
   right = document.getElementById("right");
   setup = document.getElementById("setup");
+  config = document.getElementById("config");
+  config.style.visibility = "hidden";
   docMinSize = ( document.documentElement.clientWidth < 
                  document.documentElement.clientHeight ?
                  document.documentElement.clientWidth :
@@ -50,12 +56,20 @@ function connectWS(){
       ws.send(cmdstr);
     }
     ,100);
+    aliveID = setTimeout(function(){
+      ws.close();
+    }
+    , 300);
   };
 
   ws.onmessage = function (evt) 
   { 
-    var received_msg = evt.data;
-    //Not expecting any messages back, do nothing with it
+    var msg = evt.data;
+    if (msg == '_OO_'){
+      clearTimeout(aliveID);
+    } else {
+      alert(evt.data);
+    }
   };
 
   ws.onclose = function()
@@ -65,13 +79,23 @@ function connectWS(){
   };
 }
 
-function validateRange(value,rangemin,rangemax)
+function constrain(value,rangemin,rangemax)
 {
   return ((value < rangemin) ? rangemin : ((value > rangemax) ? rangemax : value));
 }
 
+function absmap(value, in_min, in_max, out_min, out_max)
+{
+  if(value<0){
+    return -((-value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);  
+  } else {
+    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+  }
+}
+
 function touchStart(evt){
   writeText(evt.target.id, "Start");
+  cmds = [0,0,0,0,0,0,0,0];
   origin[evt.target.id].y = Math.round(evt.targetTouches[0].clientY);
 }
 
@@ -82,17 +106,18 @@ function touchEnd(evt){
 
 function touchMove(evt){
   var delta = origin[evt.target.id].y - Math.round(evt.targetTouches[0].clientY);
-  var throttle = (2 * delta / docMinSize);
+  var throttle = 100 * (touchscale * delta / docMinSize);
   var command = Math.round(255 * throttle);
   
-  if (Math.abs(throttle) < 0.1 ){
+  if (Math.abs(throttle) < deadband ){
     command = 0;
   } else {
-    command = validateRange(command, -255,255); 
+    command = absmap(throttle, deadband, 100, map_outmin, map_outmax);
+    command = Math.round(constrain(command, -255,255));
   }
   
   if(evt.touches.length == 2){  
-    writeText(evt.target.id, Math.round(throttle * 100 ) + "% command:" + command);
+    writeText(evt.target.id, Math.round(throttle) + "% command:" + command);
     
     if(evt.target.id == "left"){
       if (delta >= 0){
@@ -164,6 +189,16 @@ button, input, textarea, select, option {
   position: absolute;
   top: 0px;
   left: 0px;
+  z-index:999;
+  border:none;
+}
+#config {
+  width: 100%;
+  height: 100%;
+  background-color: #000033;
+  position: absolute;
+  top: 0px;
+  left: 0px;
   z-index:9999;
   border:none;
 }
@@ -174,20 +209,35 @@ button, input, textarea, select, option {
     <div id="setup">
       <div class="centre">
         <div>
-          Connection<br>
-          <input  id="wsurl" type="text" size="30" value=""/><br>
+          <h1>ESP-OO Connection</h1>
+          <input  id="wsurl" type="text" size="30" value=""/><br><br>
+          <!---
           <button onclick="document.getElementById('wsurl').value = 'ws://192.168.1.130:81/';">Dummy URL</button><br>
-          <button onclick="connectWS();">Connect</button><br><br>
-
-          Optional Wi-Fi Access Point Configuration
+          --->
+          <button onclick="connectWS();" style="width: 300px; height: 100px;">Connect</button>
+          <br><br><br>
+          <button onclick="config.style.visibility = 'visible';">Config</button>
+        <div>
+      </div>
+    </div>
+    <div id="config">
+      <div class="centre">
+        <div>
+          <h1>Optional Configuration</h1>
           <form action="configwifi" method="get">
+            <h2>Wi-Fi</h2>
             HOSTNAME : <input type="text"     name="hostname" id="hostname" size="31" value=""/><br>
             SSID1    : <input type="text"     name="ssid1" id="ssid1" size="31" value=""/><br>
-            PSK1     :  <input type="password" name="pass1" id="pass1" size="31" value=""/><br>
+            PSK1     : <input type="password" name="pass1" id="pass1" size="31" value=""/><br>
             SSID2    : <input type="text"     name="ssid2" id="ssid2" size="31" value=""/><br>
-            PSK2     :  <input type="password" name="pass2" id="pass2" size="31" value=""/><br>
+            PSK2     : <input type="password" name="pass2" id="pass2" size="31" value=""/><br>
+            <h2>Control</h2>
+            ... TODO ...
+            <br><br>
             <input type="submit" value="Submit">
           </form>      
+          <br><br>
+          <button onclick="config.style.visibility = 'hidden';">Cancel</button>
         <div>
       </div>
     </div>
