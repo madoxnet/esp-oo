@@ -57,8 +57,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t payloa
             Serial.printf("[%u] get Text: %s\n", num, payload);
 
             if(payload[0] == '#') {
-                strncpy ( M_A_STR, (const char *) &payload[1], 8 );
-                strncpy ( M_B_STR, (const char *) &payload[9], 8 );
+                strncpy ( M_A_STR, (char *) &payload[1], 8 );
+                strncpy ( M_B_STR, (char *) &payload[9], 8 );
                 M_A = (uint32_t) strtoul(M_A_STR, NULL, 16);
                 M_B = (uint32_t) strtoul(M_B_STR, NULL, 16);
                 analogWrite(M1A, ((M_A >> 24) & 0xFF));
@@ -71,13 +71,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t payloa
                 analogWrite(M4B, ((M_B >> 0) & 0xFF));
                 Serial.printf("A - %u,%u,%u,%u\n", ((M_A >> 24) & 0xFF),((M_A >> 16) & 0xFF),((M_A >> 8) & 0xFF),((M_A >> 0) & 0xFF) );
                 Serial.printf("B - %u,%u,%u,%u\n", ((M_B >> 24) & 0xFF),((M_B >> 16) & 0xFF),((M_B >> 8) & 0xFF),((M_B >> 0) & 0xFF) );
+                webSocket.sendTXT(num, "_OO_");
             }
-            
             break;
         case WStype_BIN:
             Serial.printf("[%u] get binary length: %u\n", num, payload_len);
-            hexdump(payload, payload_len);
-
+            //hexdump(payload, payload_len);
             break;
     }
 }
