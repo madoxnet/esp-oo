@@ -16,6 +16,10 @@
 //EEPROM
 #include <EEPROM.h>
 
+//OTA
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+
 //Motor pinout definitions
 #define M1A 14
 #define M2A 5
@@ -87,13 +91,10 @@ void setup() {
   
   Serial.begin(115200);
   delay(10);
-
-  Serial.setDebugOutput(true);
-
-  Serial.println();
+  //Serial.setDebugOutput(true);
 
   //Load WiFi
-  Serial.println("Loading WiFi config");
+  Serial.println("Loading Wi-Fi config");
   EEPROM.begin(512);
   EEPROM.get(0, ssid1);
   EEPROM.get(0+sizeof(ssid1), pass1);
@@ -116,16 +117,17 @@ void setup() {
       break;
     }
     delay(500);
-    Serial.println("Attempting WiFi connection");
+    Serial.println("Attempting Wi-Fi connection");
     retries++;
   }
   
   if(WiFiMulti.run() == WL_CONNECTED){
     WiFi.mode(WIFI_STA);
     Serial.println("");
-    Serial.println("WiFi connected");
+    Serial.println("Wi-Fi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+    ArduinoOTA.setHostname(hostn);
   } else {
     WiFi.softAP("ESPOO-AP");
     Serial.println("");
@@ -133,6 +135,29 @@ void setup() {
     Serial.println("IP address: ");
     Serial.println(WiFi.softAPIP());    
   }
+  
+  ArduinoOTA.onStart([]() {
+    Serial.println("\nStart");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    ESP.restart();
+  });
+
+  ArduinoOTA.begin();
+  Serial.println("OTA service started");
+  
   analogWriteRange(255);
   pinMode(M1A, OUTPUT);
   pinMode(M2A, OUTPUT);
@@ -187,4 +212,5 @@ void setup() {
 void loop() {
   webSocket.loop();
   webServer.handleClient();
+  ArduinoOTA.handle();
 }
