@@ -45,5 +45,12 @@ LiFE variants include a CN3058E charging IC.
 ## Rover
 # References
  - ESP8266
- - MIC5291
+ - MIC5219
  - L9110S
+# Software
+## 
+- Websockets
+
+# Usage
+- Default AP is ESPOO-AP
+- Default IP is 192.168.4.1
