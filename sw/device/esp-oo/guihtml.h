@@ -1,18 +1,20 @@
 const char GUIHTML[] PROGMEM = R"=====(
+
 <!DOCTYPE HTML>
 <html>
   <head>
-    <title>Remote Control</title>
+    <title>ESP-OO Remote Control</title>
     <meta name="viewport"
           content="width=device-width, initial-scale=1,
                    maximum-scale=1, user-scalable=0"/>
     <meta name="mobile-web-app-capable" content="yes">
+    <link rel="icon" sizes="192x192" href="/icon.png">
     <script type="text/javascript" src="config.js"></script>
     <script type="text/javascript">
 
 var left = null;
 var right = null;
-var origin = {left:{x:0,y:0},right:{x:0,y:0}};
+var origin = {left:{x:0,y:0},right:{x:0,y:0},full:{x:0,y:0}};
 var cmds = [0,0,0,0,0,0,0,0];
 var wsurl = "ws://" + window.location.hostname + ":81/";
 var docMinSize = 100;
@@ -25,8 +27,12 @@ var map_outmax = 255;
 function init(){
   left = document.getElementById("left");
   right = document.getElementById("right");
+  full = document.getElementById("full");
+  twohand = document.getElementById("twohand");
+  singlehand = document.getElementById("singlehand");
   setup = document.getElementById("setup");
   config = document.getElementById("config");
+  singlehand.style.visibility = "hidden"; //Default two-handed controls
   config.style.visibility = "hidden";
   docMinSize = ( document.documentElement.clientWidth < 
                  document.documentElement.clientHeight ?
@@ -96,6 +102,7 @@ function absmap(value, in_min, in_max, out_min, out_max)
 function touchStart(evt){
   writeText(evt.target.id, "Start");
   cmds = [0,0,0,0,0,0,0,0];
+  origin[evt.target.id].x = Math.round(evt.targetTouches[0].clientX);
   origin[evt.target.id].y = Math.round(evt.targetTouches[0].clientY);
 }
 
@@ -105,40 +112,85 @@ function touchEnd(evt){
 }
 
 function touchMove(evt){
-  var delta = origin[evt.target.id].y - Math.round(evt.targetTouches[0].clientY);
-  var throttle = 100 * (touchscale * delta / docMinSize);
-  var command = Math.round(255 * throttle);
+  var deltaX = origin[evt.target.id].x - Math.round(evt.targetTouches[0].clientX);
+  var deltaY = origin[evt.target.id].y - Math.round(evt.targetTouches[0].clientY);
   
-  if (Math.abs(throttle) < deadband ){
-    command = 0;
-  } else {
-    command = absmap(throttle, deadband, 100, map_outmin, map_outmax);
-    command = Math.round(constrain(command, -255,255));
-  }
-  
-  if(evt.touches.length == 2){  
-    writeText(evt.target.id, Math.round(throttle) + "% command:" + command);
-    
-    if(evt.target.id == "left"){
-      if (delta >= 0){
-        cmds[0] = command;
-        cmds[4] = 0;
+  var throttleX = 100 * (touchscale * deltaX / docMinSize);
+  var throttleY = 100 * (touchscale * deltaY / docMinSize);
+  var commandLeft = 0;
+  var commandRight = 0;
+  var commandY = 0;
+
+  if(singlehand.style.visibility == "hidden"){
+    if ( (Math.abs(throttleY) < deadband) ){
+      commandY = 0;
+    } else {
+      commandY = absmap(throttleY, deadband, 100, map_outmin, map_outmax);
+      commandY = Math.round(constrain(commandY, -255,255));
+    }
+    if(evt.touches.length == 2){
+      writeText(evt.target.id, Math.round(throttleY) + "% command:" + commandY);
+      if(evt.target.id == "left"){
+        if (deltaY >= 0){
+          //Left motor forward
+          cmds[0] = commandY;
+          cmds[4] = 0;
+        } else {
+          //Left motor backward
+          cmds[0] = 0;
+          cmds[4] = -commandY;
+        }
+      } else if (evt.target.id == "right"){
+        if (deltaY >= 0){
+          //Right motor forward
+          cmds[1] = commandY;
+          cmds[5] = 0;
+        } else {
+          //Right motor backward
+          cmds[1] = 0;
+          cmds[5] = -commandY;
+        }
       } else {
-        cmds[0] = 0;
-        cmds[4] = -command;
-      }
-    } else if (evt.target.id == "right"){
-      if (delta >= 0){
-        cmds[1] = command;
-        cmds[5] = 0;
-      } else {
-        cmds[1] = 0;
-        cmds[5] = -command;
       }
     } else {
+      cmds = [0,0,0,0,0,0,0,0];
     }
   } else {
-    cmds = [0,0,0,0,0,0,0,0];
+    if ( (Math.abs(throttleX) < deadband) && (Math.abs(throttleY) < deadband) ){
+      commandLeft = 0;
+      commandRight = 0;
+    } else {
+      commandLeft = absmap((throttleY - throttleX), deadband, 100, map_outmin, map_outmax);
+      commandLeft = Math.round(constrain(commandLeft, -255,255));
+      commandRight = absmap((throttleY + throttleX), deadband, 100, map_outmin, map_outmax);
+      commandRight = Math.round(constrain(commandRight, -255,255));
+    }
+    if(evt.touches.length == 1){
+      writeText(evt.target.id, Math.round(throttleX) + "% command:" + commandLeft + "," + Math.round(throttleY) + "% command:" + commandRight);
+      if(evt.target.id == "full"){
+        if (commandLeft >= 0){
+          //Left motor forward
+          cmds[0] = commandLeft;
+          cmds[4] = 0;
+        } else {
+          //Left motor backward
+          cmds[0] = 0;
+          cmds[4] = -commandLeft;
+        }
+        if (commandRight >= 0){
+          //Right motor forward
+          cmds[1] = commandRight;
+          cmds[5] = 0;
+        } else {
+          //Right motor backward
+          cmds[1] = 0;
+          cmds[5] = -commandRight;
+        }
+      } else {
+      }
+    } else {
+      cmds = [0,0,0,0,0,0,0,0];
+    }
   }
 }
 
@@ -182,30 +234,37 @@ button, input, textarea, select, option {
   justify-content: center; 
   align-items: center;
 }
-#setup {
+#singlehand, #twohand, #setup, #config {
   width: 100%;
   height: 100%;
   background-color: #000033;
   position: absolute;
   top: 0px;
   left: 0px;
-  z-index:999;
   border:none;
 }
+#setup {
+  z-index:999;
+}
+
 #config {
-  width: 100%;
-  height: 100%;
-  background-color: #000033;
-  position: absolute;
-  top: 0px;
-  left: 0px;
   z-index:9999;
-  border:none;
 }
     </style>
   </head>
   <body onload="init();">
-    <div class="box"><div id="left" class="centre">Left</div></div><div class="box"><div id="right" class="centre">Right</div></div>
+    <div id="twohand">
+      <div class="box">
+        <div id="left" class="centre">Left</div>
+      </div><div class="box">
+      <div id="right" class="centre">Right</div>
+      </div>
+    </div>
+    <div id="singlehand">
+      <div class="box" style="width: 100%">
+        <div id="full" class="centre">Control</div>
+      </div>
+    </div>
     <div id="setup">
       <div class="centre">
         <div>
@@ -214,6 +273,8 @@ button, input, textarea, select, option {
           <!---
           <button onclick="document.getElementById('wsurl').value = 'ws://192.168.1.130:81/';">Dummy URL</button><br>
           --->
+          <input type="radio" name="mode" value="single" onclick="singlehand.style.visibility = 'visible';twohand.style.visibility = 'hidden';"/>Single handed controls<br>
+          <input type="radio" name="mode" value="dual" checked="checked" onclick="singlehand.style.visibility = 'hidden';twohand.style.visibility = 'visible';"/> Two handed controls<br><br>
           <button onclick="connectWS();" style="width: 300px; height: 100px;">Connect</button>
           <br><br><br>
           <button onclick="config.style.visibility = 'visible';">Config</button>
@@ -243,4 +304,5 @@ button, input, textarea, select, option {
     </div>
   </body>
 </html>
+
 )=====";

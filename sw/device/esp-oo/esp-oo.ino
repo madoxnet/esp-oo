@@ -49,16 +49,16 @@ WebSocketsServer webSocket = WebSocketsServer(81);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t payload_len) {
     switch(type) {
         case WStype_DISCONNECTED:
-            Serial.printf("[%u] Disconnected!\n", num);
+            Serial.printf("[%u] Disconnected!\r\n", num);
             break;
         case WStype_CONNECTED:
             {
                 IPAddress ip = webSocket.remoteIP(num);
-                Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+                Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\r\n", num, ip[0], ip[1], ip[2], ip[3], payload);
             }
             break;
         case WStype_TEXT:
-            Serial.printf("[%u] get Text: %s\n", num, payload);
+            Serial.printf("[%u] Got text: %s\r\n", num, payload);
 
             if(payload[0] == '#') {
                 strncpy ( M_A_STR, (char *) &payload[1], 8 );
@@ -73,13 +73,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t payloa
                 analogWrite(M2B, ((M_B >> 16) & 0xFF));
                 analogWrite(M3B, ((M_B >> 8) & 0xFF));
                 analogWrite(M4B, ((M_B >> 0) & 0xFF));
-                Serial.printf("A - %u,%u,%u,%u\n", ((M_A >> 24) & 0xFF),((M_A >> 16) & 0xFF),((M_A >> 8) & 0xFF),((M_A >> 0) & 0xFF) );
-                Serial.printf("B - %u,%u,%u,%u\n", ((M_B >> 24) & 0xFF),((M_B >> 16) & 0xFF),((M_B >> 8) & 0xFF),((M_B >> 0) & 0xFF) );
+                Serial.printf("A - %u,%u,%u,%u\r\n", ((M_A >> 24) & 0xFF),((M_A >> 16) & 0xFF),((M_A >> 8) & 0xFF),((M_A >> 0) & 0xFF) );
+                Serial.printf("B - %u,%u,%u,%u\r\n", ((M_B >> 24) & 0xFF),((M_B >> 16) & 0xFF),((M_B >> 8) & 0xFF),((M_B >> 0) & 0xFF) );
                 webSocket.sendTXT(num, "_OO_");
             }
             break;
         case WStype_BIN:
-            Serial.printf("[%u] get binary length: %u\n", num, payload_len);
+            Serial.printf("[%u] get binary length: %u\r\n", num, payload_len);
             //hexdump(payload, payload_len);
             break;
     }
